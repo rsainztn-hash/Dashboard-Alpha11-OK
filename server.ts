@@ -1,5 +1,4 @@
 import express from "express";
-import { createServer as createViteServer } from "vite";
 import path from "path";
 import { fileURLToPath } from "url";
 import { google } from "googleapis";
@@ -211,6 +210,7 @@ app.get("/api/sheets/data", async (req, res) => {
 // Vite middleware for local development. Vercel runs this file as a serverless
 // function, so it must export the Express app without opening a listening port.
 if (!isVercel && !isProduction) {
+  const { createServer: createViteServer } = await import("vite");
   const vite = await createViteServer({
     server: { middlewareMode: true },
     appType: "spa",
