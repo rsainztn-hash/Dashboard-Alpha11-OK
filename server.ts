@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { google } from "googleapis";
 import cookieParser from "cookie-parser";
 import dotenv from "dotenv";
+import * as XLSX from "xlsx";
 
 dotenv.config();
 
@@ -35,6 +36,10 @@ const hasServiceAccountCredentials = () => {
   return !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY;
 };
 
+const hasPublicSheetsExport = () => {
+  return process.env.GOOGLE_SHEETS_PUBLIC_EXPORT === "true";
+};
+
 const getServiceAccountAuth = () => {
   const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
 
@@ -47,6 +52,31 @@ const getServiceAccountAuth = () => {
 
 const quoteSheetNameForA1 = (name: string) => {
   return `'${name.replace(/'/g, "''")}'`;
+};
+
+const getPublicWorkbookData = async (sheetId: string) => {
+  const exportUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`;
+  const response = await fetch(exportUrl);
+
+  if (!response.ok) {
+    throw new Error(`No se pudo descargar la hoja publica (${response.status})`);
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("spreadsheet") && !contentType.includes("octet-stream")) {
+    throw new Error("Google no devolvio un archivo Excel. Revisa que la hoja sea publica con permiso de lectura.");
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  const workbook = XLSX.read(arrayBuffer, { type: "array", cellDates: true, dateNF: "yyyy-mm-dd" });
+  const allData: Record<string, any[]> = {};
+
+  for (const name of workbook.SheetNames) {
+    const worksheet = workbook.Sheets[name];
+    allData[name] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+  }
+
+  return allData;
 };
 
 const getBaseUrl = (req: express.Request) => {
@@ -66,8 +96,8 @@ const getRedirectUri = (req: express.Request) => {
 app.get("/api/auth/google/status", (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
   res.json({
-    authenticated: hasServiceAccountCredentials() || !!tokensCookie,
-    mode: hasServiceAccountCredentials() ? "service_account" : "oauth",
+    authenticated: hasServiceAccountCredentials() || hasPublicSheetsExport() || !!tokensCookie,
+    mode: hasServiceAccountCredentials() ? "service_account" : hasPublicSheetsExport() ? "public_export" : "oauth",
   });
 });
 
@@ -194,8 +224,9 @@ app.get("/auth/callback", async (req, res) => {
 app.get("/api/sheets/data", async (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
   const useServiceAccount = hasServiceAccountCredentials();
+  const usePublicExport = hasPublicSheetsExport();
 
-  if (!useServiceAccount && !tokensCookie) {
+  if (!useServiceAccount && !usePublicExport && !tokensCookie) {
     return res.status(401).json({ error: "No autenticado con Google" });
   }
 
@@ -205,6 +236,11 @@ app.get("/api/sheets/data", async (req, res) => {
   }
 
   try {
+    if (usePublicExport) {
+      const allData = await getPublicWorkbookData(sheetId);
+      return res.json({ data: allData });
+    }
+
     const auth = useServiceAccount ? getServiceAccountAuth() : oauth2Client;
     if (!useServiceAccount) {
       const tokens = JSON.parse(tokensCookie);

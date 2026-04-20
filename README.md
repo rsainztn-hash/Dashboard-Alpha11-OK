@@ -29,6 +29,14 @@ GOOGLE_PRIVATE_KEY=
 
 Con esas dos variables configuradas, Vercel lee Google Sheets desde el servidor y cualquier persona con la URL puede ver el dashboard sin OAuth.
 
+Si Google Cloud bloquea la creacion de llaves de cuenta de servicio, puedes usar una hoja compartida/publicada como solo lectura y activar este modo:
+
+```bash
+GOOGLE_SHEETS_PUBLIC_EXPORT=true
+```
+
+En ese modo Vercel descarga la hoja como archivo Excel desde Google Sheets. Solo debe usarse si estas de acuerdo en que los datos fuente sean legibles por cualquiera que tenga el enlace de la hoja.
+
 En Vercel, `GOOGLE_REDIRECT_URI` debe usar la URL final del proyecto:
 
 ```bash
@@ -61,7 +69,7 @@ http://localhost:3000/auth/callback
 1. Sube este proyecto a GitHub.
 2. En Vercel, crea un proyecto importando ese repositorio.
 3. Configura `GOOGLE_SHEET_ID`.
-4. Para acceso publico sin login, configura `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_PRIVATE_KEY` y comparte la hoja con ese email.
+4. Para acceso publico sin login, configura `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_PRIVATE_KEY` y comparte la hoja con ese email. Si tu Google Cloud no permite llaves, configura `GOOGLE_SHEETS_PUBLIC_EXPORT=true` y comparte/publica la hoja como solo lectura.
 5. Si vas a usar OAuth personal como respaldo, configura tambien `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `GOOGLE_REDIRECT_URI`.
 6. Despliega.
 7. Copia la URL final de Vercel.
