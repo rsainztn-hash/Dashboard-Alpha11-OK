@@ -31,6 +31,20 @@ const getSheetsErrorMessage = (error: unknown) => {
   return "Error desconocido";
 };
 
+const hasServiceAccountCredentials = () => {
+  return !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY;
+};
+
+const getServiceAccountAuth = () => {
+  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+
+  return new google.auth.JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: privateKey,
+    scopes: SCOPES,
+  });
+};
+
 const quoteSheetNameForA1 = (name: string) => {
   return `'${name.replace(/'/g, "''")}'`;
 };
@@ -51,7 +65,10 @@ const getRedirectUri = (req: express.Request) => {
 // API Routes
 app.get("/api/auth/google/status", (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
-  res.json({ authenticated: !!tokensCookie });
+  res.json({
+    authenticated: hasServiceAccountCredentials() || !!tokensCookie,
+    mode: hasServiceAccountCredentials() ? "service_account" : "oauth",
+  });
 });
 
 app.get("/api/auth/google/url", (req, res) => {
@@ -176,7 +193,9 @@ app.get("/auth/callback", async (req, res) => {
 
 app.get("/api/sheets/data", async (req, res) => {
   const tokensCookie = req.cookies.google_tokens;
-  if (!tokensCookie) {
+  const useServiceAccount = hasServiceAccountCredentials();
+
+  if (!useServiceAccount && !tokensCookie) {
     return res.status(401).json({ error: "No autenticado con Google" });
   }
 
@@ -186,10 +205,13 @@ app.get("/api/sheets/data", async (req, res) => {
   }
 
   try {
-    const tokens = JSON.parse(tokensCookie);
-    oauth2Client.setCredentials(tokens);
+    const auth = useServiceAccount ? getServiceAccountAuth() : oauth2Client;
+    if (!useServiceAccount) {
+      const tokens = JSON.parse(tokensCookie);
+      oauth2Client.setCredentials(tokens);
+    }
 
-    const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+    const sheets = google.sheets({ version: "v4", auth });
     
     // Fetch all sheet names first
     const spreadsheet = await sheets.spreadsheets.get({

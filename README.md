@@ -7,7 +7,7 @@ Dashboard generado en Google AI Studio, preparado para correr localmente y para 
 - GitHub guarda solo el codigo del dashboard.
 - Vercel publica la app y ejecuta las rutas `/api/*` y `/auth/callback`.
 - Google Sheets sigue siendo la fuente de datos.
-- Las credenciales OAuth y el ID de la hoja deben vivir en variables de entorno, no en GitHub.
+- Las credenciales de Google y el ID de la hoja deben vivir en variables de entorno, no en GitHub.
 
 ## Variables de entorno
 
@@ -19,6 +19,15 @@ GOOGLE_CLIENT_SECRET=
 GOOGLE_SHEET_ID=
 GOOGLE_REDIRECT_URI=
 ```
+
+Para un dashboard publico donde los socios no tengan que iniciar sesion, usa tambien una cuenta de servicio y comparte la hoja con su email:
+
+```bash
+GOOGLE_SERVICE_ACCOUNT_EMAIL=
+GOOGLE_PRIVATE_KEY=
+```
+
+Con esas dos variables configuradas, Vercel lee Google Sheets desde el servidor y cualquier persona con la URL puede ver el dashboard sin OAuth.
 
 En Vercel, `GOOGLE_REDIRECT_URI` debe usar la URL final del proyecto:
 
@@ -51,11 +60,13 @@ http://localhost:3000/auth/callback
 
 1. Sube este proyecto a GitHub.
 2. En Vercel, crea un proyecto importando ese repositorio.
-3. Configura las variables de entorno de arriba.
-4. Despliega.
-5. Copia la URL final de Vercel.
-6. Agrega `https://TU-PROYECTO.vercel.app/auth/callback` en Google Cloud OAuth.
-7. Entra al dashboard publicado y usa "Sincronizar" para leer Google Sheets.
+3. Configura `GOOGLE_SHEET_ID`.
+4. Para acceso publico sin login, configura `GOOGLE_SERVICE_ACCOUNT_EMAIL` y `GOOGLE_PRIVATE_KEY` y comparte la hoja con ese email.
+5. Si vas a usar OAuth personal como respaldo, configura tambien `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `GOOGLE_REDIRECT_URI`.
+6. Despliega.
+7. Copia la URL final de Vercel.
+8. Si usas OAuth, agrega `https://TU-PROYECTO.vercel.app/auth/callback` en Google Cloud OAuth.
+9. Entra al dashboard publicado y usa "Sincronizar" para leer Google Sheets.
 
 ## Nota sobre datos
 
