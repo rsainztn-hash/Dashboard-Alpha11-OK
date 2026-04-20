@@ -1,31 +1,17 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { cn } from '@/src/lib/utils';
-import { Upload, RefreshCw } from 'lucide-react';
 
 interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
-  onFileUpload: (file: File) => void;
-  onGoogleSync: () => void;
-  isGoogleConnected: boolean;
 }
 
-export default function Navbar({ activeTab, setActiveTab, onFileUpload, onGoogleSync, isGoogleConnected }: NavbarProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+export default function Navbar({ activeTab, setActiveTab }: NavbarProps) {
   const tabs = [
     { id: 'home', label: 'Home' },
     { id: 'reports', label: 'Reports' },
     { id: 'ads', label: 'Ads' },
   ];
-
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      console.log('Archivo seleccionado:', file.name, file.type);
-      onFileUpload(file);
-    }
-  };
 
   return (
     <header className="fixed top-0 z-50 w-full bg-white border-b border-outline-variant/15 shadow-sm">
@@ -50,26 +36,7 @@ export default function Navbar({ activeTab, setActiveTab, onFileUpload, onGoogle
           </nav>
         </div>
 
-        <div className="flex items-center gap-4">
-          {isGoogleConnected ? (
-            <button
-              onClick={onGoogleSync}
-              className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg shadow-md transition-all bg-green-600 hover:bg-green-700 text-white"
-            >
-              <RefreshCw className="w-4 h-4 animate-spin-slow" />
-              <span className="text-sm">Sincronizado</span>
-            </button>
-          ) : (
-            <a
-              href="/api/auth/google/login"
-              target="google_auth"
-              className="flex items-center gap-2 px-4 py-2 font-bold rounded-lg shadow-md transition-all bg-primary text-white hover:bg-primary/90"
-            >
-              <RefreshCw className="w-4 h-4" />
-              <span className="text-sm">Conectar Google</span>
-            </a>
-          )}
-        </div>
+        <div className="hidden md:block" />
       </div>
     </header>
   );

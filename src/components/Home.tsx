@@ -9,8 +9,7 @@ import {
   Camera, 
   Headphones,
   ArrowUp,
-  ArrowDown,
-  Loader2
+  ArrowDown
 } from 'lucide-react';
 import { 
   AreaChart, 
@@ -28,7 +27,6 @@ import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import FilterControls from './FilterControls';
-import { GoogleGenAI, Type } from "@google/genai";
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrAfter);
@@ -554,8 +552,6 @@ export default function Home({
     return intervals;
   }, [timeSeries, selectedPeriod, selectedWeek, selectedMonth, selectedYear, selectedChannel, data]);
 
-  const [aiInsights, setAiInsights] = React.useState<any[]>([]);
-  const [isAiLoading, setIsAiLoading] = React.useState(false);
   const [showAllProducts, setShowAllProducts] = React.useState(false);
 
   // Filter Top Products based on channel and period
@@ -586,88 +582,35 @@ export default function Home({
 
   const finalTopProducts = allProductsSorted.slice(0, 5);
 
-  // AI Insights Generation
-  React.useEffect(() => {
-    const generateInsights = async () => {
-      if (!data || timeSeries.length === 0) return;
-      
-      setIsAiLoading(true);
-      try {
-        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        
-        // Prepare data summary for AI
-        const dataSummary = {
-          period: selectedPeriod,
-          channel: selectedChannel,
-          metrics: {
-            sales: currentSales,
-            salesGrowth,
-            spend: currentSpend,
-            spendGrowth,
-            roas,
-            acos,
-            netMargin,
-            financialResult
-          },
-          topProducts: finalTopProducts.map(p => ({ name: p.name, percentage: p.percentage })),
-          recentHistory: filteredTimeSeries.slice(-5).map(t => ({ date: t.date, amount: t[selectedChannel] || 0 }))
-        };
+  const displayInsights = React.useMemo(() => {
+    const topProduct = finalTopProducts[0];
+    const growthDirection = salesGrowth >= 0 ? 'por encima' : 'por debajo';
+    const growthColor = salesGrowth >= 0 ? 'border-primary-container' : 'border-red-500';
+    const efficiencyColor = Number(roas) >= 3 && Number(acos) <= 20 ? 'border-primary-container' : 'border-amber-500';
+    const marginColor = Number(netMargin) >= 15 ? 'border-primary-container' : 'border-red-500';
 
-        const prompt = `Analyze this e-commerce financial data for the period ${selectedPeriod} and channel ${selectedChannel}. 
-        Provide 3 specific "Smart Insights" in Spanish.
-        1. Sales Growth: Analyze the sales trend and growth.
-        2. Ad Efficiency: Analyze ROAS (${roas}x) and ACOS (${acos}%).
-        3. Inventory/Alert: Based on the data, suggest a critical alert or inventory action.
-        
-        Data Summary: ${JSON.stringify(dataSummary)}
-        
-        Return exactly 3 insights in JSON format.`;
-
-        const response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
-          contents: prompt,
-          config: {
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  title: { type: Type.STRING },
-                  text: { type: Type.STRING },
-                  color: { type: Type.STRING, description: "Tailwind border color class, e.g. 'border-primary-container' or 'border-red-500'" }
-                },
-                required: ["title", "text", "color"]
-              }
-            }
-          }
-        });
-
-        const insights = JSON.parse(response.text || "[]");
-        if (insights.length > 0) {
-          setAiInsights(insights);
-        }
-      } catch (error) {
-        console.error("Error generating AI insights:", error);
-        // Fallback to static insights if AI fails
-        setAiInsights([
-          { title: 'Sales Growth', color: 'border-primary-container', text: `Las ventas totales están un ${salesGrowth.toFixed(1)}% ${salesGrowth >= 0 ? 'por encima' : 'por debajo'} del periodo anterior.` },
-          { title: 'Ad Efficiency', color: 'border-primary-container', text: `El ROAS se mantiene en ${roas}x con un ACOS del ${acos}%, indicando una eficiencia publicitaria ${Number(roas) > 3 ? 'saludable' : 'que requiere optimización'}.` },
-          { title: 'Inventory Alert', color: 'border-red-500', text: 'Se recomienda revisar los niveles de stock de los productos con mayor rotación para evitar quiebres de inventario.' },
-        ]);
-      } finally {
-        setIsAiLoading(false);
-      }
-    };
-
-    generateInsights();
-  }, [data, selectedPeriod, selectedChannel, currentSales, salesGrowth, roas, acos, netMargin]);
-
-  const displayInsights = aiInsights.length > 0 ? aiInsights : [
-    { title: 'Sales Growth', color: 'border-primary-container', text: 'Analizando tendencias de crecimiento...' },
-    { title: 'Ad Efficiency', color: 'border-primary-container', text: 'Calculando eficiencia publicitaria...' },
-    { title: 'Inventory Alert', color: 'border-red-500', text: 'Verificando alertas de inventario...' },
-  ];
+    return [
+      {
+        title: 'Sales Growth',
+        color: growthColor,
+        text: `Las ventas de ${selectedChannel} están ${Math.abs(salesGrowth).toFixed(1)}% ${growthDirection} del periodo anterior.`
+      },
+      {
+        title: 'Ad Efficiency',
+        color: efficiencyColor,
+        text: currentSpend > 0
+          ? `El ROAS está en ${roas}x y el ACOS en ${acos}%, ${Number(roas) >= 3 ? 'con eficiencia saludable' : 'con oportunidad de optimizar inversión publicitaria'}.`
+          : 'No hay inversión publicitaria registrada para este periodo.'
+      },
+      {
+        title: 'Inventory Alert',
+        color: marginColor,
+        text: topProduct
+          ? `Prioriza disponibilidad de ${topProduct.name}, que concentra ${topProduct.percentage}% de las ventas del periodo. Margen neto actual: ${netMargin}%.`
+          : `Revisa disponibilidad de los productos de mayor rotación. Margen neto actual: ${netMargin}%.`
+      },
+    ];
+  }, [finalTopProducts, salesGrowth, selectedChannel, currentSpend, roas, acos, netMargin]);
 
   return (
     <div className="pb-12 px-6 max-w-screen-2xl mx-auto space-y-10 pt-16">
@@ -812,12 +755,6 @@ export default function Home({
             </div>
             <h2 className="text-xl font-bold">Smart Insights</h2>
           </div>
-          {isAiLoading && (
-            <div className="flex items-center gap-2 text-primary-container animate-pulse">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              <span className="text-[10px] font-bold uppercase tracking-widest">AI Analizando...</span>
-            </div>
-          )}
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {displayInsights.map((insight) => (
