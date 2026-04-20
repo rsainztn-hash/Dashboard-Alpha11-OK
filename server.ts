@@ -32,12 +32,21 @@ const getSheetsErrorMessage = (error: unknown) => {
   return "Error desconocido";
 };
 
+const normalizeGoogleSheetId = (value?: string) => {
+  if (!value) return undefined;
+
+  const trimmed = value.trim();
+  const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match?.[1] || trimmed;
+};
+
 const getGoogleSheetId = () => {
-  return (
+  return normalizeGoogleSheetId(
     process.env.GOOGLE_SHEET_ID ||
     process.env.GOOGLE_SPREADSHEET_ID ||
     process.env.GOOGLE_SHEETS_ID ||
-    process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID
+    process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID ||
+    process.env.SPREADSHEET_URL
   );
 };
 
