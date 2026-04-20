@@ -1,0 +1,5 @@
+{
+  "name": "Alpha11 Dashboard",
+  "description": "Dashboard de ventas, publicidad e inventario con integración en tiempo real de Google Sheets.",
+  "requestFramePermissions": []
+}
