@@ -26,6 +26,15 @@ const oauth2Client = new google.auth.OAuth2(
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"];
 
+const getSheetsErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  return "Error desconocido";
+};
+
+const quoteSheetNameForA1 = (name: string) => {
+  return `'${name.replace(/'/g, "''")}'`;
+};
+
 const getBaseUrl = (req: express.Request) => {
   const forwardedHost = req.headers["x-forwarded-host"];
   const host = Array.isArray(forwardedHost) ? forwardedHost[0] : forwardedHost || req.headers.host;
@@ -192,12 +201,19 @@ app.get("/api/sheets/data", async (req, res) => {
     const allData: Record<string, any[]> = {};
     
     for (const name of sheetNames) {
-      const response = await sheets.spreadsheets.values.get({
-        spreadsheetId: sheetId,
-        range: `${name}!A:ZZ`,
-      });
-      
-      allData[name] = response.data.values || [];
+      try {
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: sheetId,
+          range: `${quoteSheetNameForA1(name)}!A:ZZ`,
+        });
+
+        allData[name] = response.data.values || [];
+      } catch (error) {
+        console.error(`Error fetching sheet "${name}":`, error);
+        return res.status(500).json({
+          error: `Error al leer la pestaña "${name}": ${getSheetsErrorMessage(error)}`,
+        });
+      }
     }
 
     res.json({ data: allData });
