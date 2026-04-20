@@ -32,6 +32,15 @@ const getSheetsErrorMessage = (error: unknown) => {
   return "Error desconocido";
 };
 
+const getGoogleSheetId = () => {
+  return (
+    process.env.GOOGLE_SHEET_ID ||
+    process.env.GOOGLE_SPREADSHEET_ID ||
+    process.env.GOOGLE_SHEETS_ID ||
+    process.env.NEXT_PUBLIC_GOOGLE_SHEET_ID
+  );
+};
+
 const hasServiceAccountCredentials = () => {
   return !!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && !!process.env.GOOGLE_PRIVATE_KEY;
 };
@@ -230,9 +239,9 @@ app.get("/api/sheets/data", async (req, res) => {
     return res.status(401).json({ error: "No autenticado con Google" });
   }
 
-  const sheetId = process.env.GOOGLE_SHEET_ID;
+  const sheetId = getGoogleSheetId();
   if (!sheetId) {
-    return res.status(400).json({ error: "GOOGLE_SHEET_ID no configurado" });
+    return res.status(400).json({ error: "No hay ID de Google Sheet configurado" });
   }
 
   try {
@@ -277,7 +286,7 @@ app.get("/api/sheets/data", async (req, res) => {
     res.json({ data: allData });
   } catch (error) {
     console.error("Error fetching sheets data:", error);
-    res.status(500).json({ error: "Error al obtener datos de Google Sheets" });
+    res.status(500).json({ error: `Error al obtener datos de Google Sheets: ${getSheetsErrorMessage(error)}` });
   }
 });
 
