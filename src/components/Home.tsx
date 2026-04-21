@@ -849,14 +849,9 @@ export default function Home({
             {finalTopProducts.map((product: any) => (
               <div key={product.id} className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary-container">
-                      {product.icon ? <product.icon className="w-5 h-5" /> : <Watch className="w-5 h-5" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-bold text-on-surface">{product.name}</p>
-                      <p className="text-[10px] text-on-surface-variant font-medium">{product.category}</p>
-                    </div>
+                  <div className="min-w-0 pr-4">
+                    <p className="text-sm font-bold text-on-surface truncate">{product.name}</p>
+                    <p className="text-[10px] text-on-surface-variant font-medium">{product.category}</p>
                   </div>
                   <span className="text-sm font-extrabold text-on-surface">{product.percentage}%</span>
                 </div>
@@ -889,9 +884,6 @@ export default function Home({
               {allProductsSorted.map((product: any, index: number) => (
                 <div key={product.id} className="flex items-center gap-4 group">
                   <div className="text-xs font-bold text-on-surface-variant w-6">{index + 1}.</div>
-                  <div className="w-10 h-10 rounded-lg bg-primary-container/10 flex items-center justify-center text-primary-container shrink-0">
-                    {product.icon ? <product.icon className="w-5 h-5" /> : <Watch className="w-5 h-5" />}
-                  </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-end mb-1">
                       <p className="text-sm font-bold text-on-surface truncate pr-4">{product.name}</p>

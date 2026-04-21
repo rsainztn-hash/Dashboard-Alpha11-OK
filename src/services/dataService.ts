@@ -323,16 +323,14 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
         const row: any = {};
         headers.forEach((h, i) => { if (h) row[h] = rowArr[i]; });
 
-        const getVal = (names: string[], colIdx: number) => {
-          // Priority: Column Index (User mentioned A=0, N=13, Q=16)
-          if (rowArr[colIdx] !== undefined && rowArr[colIdx] !== null) return rowArr[colIdx];
-          
-          // Fallback: Named search
+        const getVal = (names: string[], colIdx?: number) => {
           for (const name of names) {
             if (row[name] !== undefined && row[name] !== null) return row[name];
             const foundKey = Object.keys(row).find(k => k.toLowerCase().includes(name.toLowerCase()));
             if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) return row[foundKey];
           }
+
+          if (colIdx !== undefined && rowArr[colIdx] !== undefined && rowArr[colIdx] !== null) return rowArr[colIdx];
           return undefined;
         };
 
@@ -346,13 +344,13 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
           totalMeliSales += amount;
           
           const dateVal = getVal(["date_created", "Fecha de compra", "fecha", "Fecha de operación", "Fecha"], 0);
-          const id = getVal(["external_reference", "Código de referencia", "id", "Order ID"], 2);
-          const sku = getVal(["SKU Producto", "sku", "SKU", "Variación SKU"], 20);
-          const title = getVal(["Título de la publicación", "title", "producto", "Item"], 5);
+          const id = getVal(["external_reference", "Código de referencia", "id", "Order ID"], 10);
+          const sku = getVal(["SKU Producto", "seller_custom_field", "sku", "SKU", "Variación SKU"], 11);
+          const title = getVal(["Descripción de la operación", "Título de la publicación", "reason", "title", "producto", "Item"], 9);
           
           const marketplaceFee = parseAmount(getVal(["marketplace_fee", "Comisión", "Cargo por venta"], 18));
           const shippingCost = parseAmount(getVal(["shipping_cost", "Costo de envío", "Envío"], 19));
-          const quantity = parseInt(getVal(["quantity", "Cantidad", "Unidades"], 6) || "1") || 1;
+          const quantity = parseInt(getVal(["quantity", "Cantidad", "Unidades"]) || "1") || 1;
           
           recordTransaction(dateVal, amount, "Meli", id, sku, title || "Meli Product", "Approved", { marketplaceFee, shippingCost, quantity });
         }
