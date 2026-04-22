@@ -612,6 +612,26 @@ export default function Home({
     ];
   }, [finalTopProducts, salesGrowth, selectedChannel, currentSpend, roas, acos, netMargin]);
 
+  const displayStockManagement = React.useMemo(() => {
+    const stockChannel = ['Amazon', 'Meli', 'Shopify'].includes(selectedChannel) ? selectedChannel : 'Total';
+    const baseStock = data?.stock || stockManagement;
+
+    return baseStock.map((item: any) => {
+      const stock = item.stockByChannel?.[stockChannel] ?? item.stock ?? 0;
+      const recentSales = item.recentSalesByChannel?.[stockChannel] ?? item.recentSales ?? 0;
+      const dailyVelocity = recentSales / 30;
+      const dohValue = dailyVelocity > 0 ? stock / dailyVelocity : (stock > 0 ? 999 : 0);
+
+      return {
+        ...item,
+        stock,
+        recentSales,
+        status: dohValue < 20 ? 'Risk' : (dohValue <= 60 ? 'Low' : 'OK'),
+        doh: dohValue === 999 ? '99+ Days' : `${Math.round(dohValue)} Days`,
+      };
+    });
+  }, [data?.stock, selectedChannel]);
+
   return (
     <div className="pb-12 px-6 max-w-screen-2xl mx-auto space-y-10 pt-16">
       {/* Header */}
@@ -972,7 +992,7 @@ export default function Home({
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/5">
-              {(data?.stock || stockManagement).map((item: any) => (
+              {displayStockManagement.map((item: any) => (
                 <tr key={item.name} className="hover:bg-surface-container-low/30 transition-colors">
                   <td className="py-6 pr-4">
                     <span className="font-bold text-sm text-on-surface">{item.name}</span>

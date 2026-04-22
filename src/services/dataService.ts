@@ -508,36 +508,24 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   const meliStockSheet = findSheet(["Inventario ML", "Inventario Meli", "Stock ML", "Stock Meli"]);
   const shopifyStockSheet = findSheet(["Inventario Shopify Bodega", "Shopify Inventory", "Stock Shopify"]);
   const stockMap: Record<string, { amazon: number, meli: number, shopify: number }> = {};
-  if (amazonStockSheet) {
-    const rows: any[] = XLSX.utils.sheet_to_json(amazonStockSheet);
+
+  const recordStock = (sheet: XLSX.WorkSheet | null, channel: 'amazon' | 'meli' | 'shopify', skuCol: number, quantityCol: number) => {
+    if (!sheet) return;
+    const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
     rows.forEach(row => {
-      const sku = String(row["sku"] || row["SKU"] || "").trim();
-      if (sku) {
-        if (!stockMap[sku]) stockMap[sku] = { amazon: 0, meli: 0, shopify: 0 };
-        stockMap[sku].amazon += parseAmount(row["available"] || row["Available"] || 0);
-      }
+      const sku = String(row?.[skuCol] || "").trim();
+      const quantity = parseAmount(row?.[quantityCol]);
+
+      if (!sku || sku.toLowerCase() === 'sku' || quantity <= 0) return;
+      if (!stockMap[sku]) stockMap[sku] = { amazon: 0, meli: 0, shopify: 0 };
+      stockMap[sku][channel] += quantity;
     });
-  }
-  if (meliStockSheet) {
-    const rows: any[] = XLSX.utils.sheet_to_json(meliStockSheet);
-    rows.forEach(row => {
-      const sku = String(row["SKU"] || row["sku"] || "").trim();
-      if (sku) {
-        if (!stockMap[sku]) stockMap[sku] = { amazon: 0, meli: 0, shopify: 0 };
-        stockMap[sku].meli += parseAmount(row["Stock en tu depósito"] || row["Stock"] || 0);
-      }
-    });
-  }
-  if (shopifyStockSheet) {
-    const rows: any[] = XLSX.utils.sheet_to_json(shopifyStockSheet);
-    rows.forEach(row => {
-      const sku = String(row["SKU"] || row["sku"] || "").trim();
-      if (sku) {
-        if (!stockMap[sku]) stockMap[sku] = { amazon: 0, meli: 0, shopify: 0 };
-        stockMap[sku].shopify += parseAmount(row["Ending inventory units"] || row["Inventory"] || 0);
-      }
-    });
-  }
+  };
+
+  recordStock(amazonStockSheet, 'amazon', 1, 6);
+  recordStock(meliStockSheet, 'meli', 4, 7);
+  recordStock(shopifyStockSheet, 'shopify', 2, 4);
 
   const finalStock: any[] = [];
   if (productSheet) {
@@ -546,23 +534,39 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
       const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('nombre') || k.toLowerCase().includes('producto'));
       const name = nameKey ? String(row[nameKey]).trim() : null;
       if (!name) return;
-      let totalAmazon = 0, totalMeli = 0, totalShopify = 0;
-      Object.keys(row).forEach(key => {
-        if (key.toLowerCase().includes('sku')) {
-          const sku = String(row[key] || "").trim();
-          if (sku && stockMap[sku]) {
-            totalAmazon += stockMap[sku].amazon;
-            totalMeli += stockMap[sku].meli;
-            totalShopify += stockMap[sku].shopify;
-          }
-        }
-      });
-      const totalStock = totalAmazon + totalMeli + totalShopify;
+      const skuAmazon = String(row["SKU Amazon"] || "").trim();
+      const skuMeli = String(row["SKU ML"] || "").trim();
+      const skuShopify = String(row["SKU Shopify"] || "").trim();
+      const totalAmazon = skuAmazon && stockMap[skuAmazon] ? stockMap[skuAmazon].amazon : 0;
+      const totalMeli = skuMeli && stockMap[skuMeli] ? stockMap[skuMeli].meli : 0;
+      const totalShopify = skuShopify && stockMap[skuShopify] ? stockMap[skuShopify].shopify : 0;
+      const stockByChannel = {
+        Amazon: totalAmazon,
+        Meli: totalMeli,
+        Shopify: totalShopify,
+        Total: totalAmazon + totalMeli + totalShopify,
+      };
       const thirtyDaysAgo = dayjs().subtract(30, 'day');
-      const recentSales = allTransactions.filter(tx => tx.product === name && dayjs(tx.date).isAfter(thirtyDaysAgo)).reduce((sum, tx) => sum + (tx.quantity || 1), 0);
+      const recentSalesByChannel = {
+        Amazon: allTransactions.filter(tx => tx.product === name && tx.channel === 'Amazon' && dayjs(tx.date).isAfter(thirtyDaysAgo)).reduce((sum, tx) => sum + (tx.quantity || 1), 0),
+        Meli: allTransactions.filter(tx => tx.product === name && tx.channel === 'Meli' && dayjs(tx.date).isAfter(thirtyDaysAgo)).reduce((sum, tx) => sum + (tx.quantity || 1), 0),
+        Shopify: allTransactions.filter(tx => tx.product === name && tx.channel === 'Shopify' && dayjs(tx.date).isAfter(thirtyDaysAgo)).reduce((sum, tx) => sum + (tx.quantity || 1), 0),
+        Direct: allTransactions.filter(tx => tx.product === name && tx.channel === 'Direct' && dayjs(tx.date).isAfter(thirtyDaysAgo)).reduce((sum, tx) => sum + (tx.quantity || 1), 0),
+      };
+      const recentSales = Object.values(recentSalesByChannel).reduce((sum, value) => sum + value, 0);
+      const totalStock = stockByChannel.Total;
       const dailyVelocity = recentSales / 30;
       const doh = dailyVelocity > 0 ? totalStock / dailyVelocity : (totalStock > 0 ? 999 : 0);
-      finalStock.push({ name, price: parseAmount(row["Precio Público de venta"] || row["Precio"] || row["Price"]), stock: totalStock, recentSales, status: doh < 20 ? 'Risk' : (doh <= 60 ? 'Low' : 'OK'), doh: doh === 999 ? '99+ Days' : `${Math.round(doh)} Days` });
+      finalStock.push({
+        name,
+        price: parseAmount(row["Precio Público de venta"] || row["Precio"] || row["Price"]),
+        stock: totalStock,
+        stockByChannel,
+        recentSales,
+        recentSalesByChannel: { ...recentSalesByChannel, Total: recentSales },
+        status: doh < 20 ? 'Risk' : (doh <= 60 ? 'Low' : 'OK'),
+        doh: doh === 999 ? '99+ Days' : `${Math.round(doh)} Days`
+      });
     });
   }
 
