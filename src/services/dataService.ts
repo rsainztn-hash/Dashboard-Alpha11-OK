@@ -509,22 +509,26 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   const shopifyStockSheet = findSheet(["Inventario Shopify Bodega", "Shopify Inventory", "Stock Shopify"]);
   const stockMap: Record<string, { amazon: number, meli: number, shopify: number }> = {};
 
-  const recordStock = (sheet: XLSX.WorkSheet | null, channel: 'amazon' | 'meli' | 'shopify', skuCol: number, quantityCol: number) => {
+  const recordStock = (sheet: XLSX.WorkSheet | null, channel: 'amazon' | 'meli' | 'shopify', skuCol: number, quantityCol: number, dedupeSku = false) => {
     if (!sheet) return;
     const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    const seenSkus = new Set<string>();
 
     rows.forEach(row => {
       const sku = String(row?.[skuCol] || "").trim();
       const quantity = parseAmount(row?.[quantityCol]);
 
       if (!sku || sku.toLowerCase() === 'sku' || quantity <= 0) return;
+      if (dedupeSku && seenSkus.has(sku)) return;
+
+      seenSkus.add(sku);
       if (!stockMap[sku]) stockMap[sku] = { amazon: 0, meli: 0, shopify: 0 };
       stockMap[sku][channel] += quantity;
     });
   };
 
   recordStock(amazonStockSheet, 'amazon', 1, 6);
-  recordStock(meliStockSheet, 'meli', 4, 7);
+  recordStock(meliStockSheet, 'meli', 4, 7, true);
   recordStock(shopifyStockSheet, 'shopify', 2, 4);
 
   const finalStock: any[] = [];
