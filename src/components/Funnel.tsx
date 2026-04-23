@@ -89,8 +89,7 @@ export default function Funnel({
     const actualSalesFromTransactions = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
     const actualSalesFromSeries = filteredTimeSeries.reduce((sum: number, item: any) => sum + (item[selectedChannel] || 0), 0);
     const actualSales = actualSalesFromTransactions || actualSalesFromSeries;
-    const orderKeys = new Set(filteredTransactions.map((tx: any, index: number) => tx.id || `${tx.date}-${tx.product}-${index}`));
-    const actualOrders = orderKeys.size || Math.max(0, Math.round(actualSales / 1200));
+    const actualOrders = filteredTransactions.length || Math.max(0, Math.round(actualSales / 1200));
     const actualUnits = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.quantity || 1), 0) || actualOrders;
 
     const sumRows = (rows: any[]) => rows.reduce((acc, row) => ({
@@ -105,9 +104,9 @@ export default function Funnel({
 
     if (filteredFunnel.length > 0) {
       const source = sumRows(filteredFunnel);
-      const orders = source.orders || actualOrders;
-      const units = source.units || actualUnits;
-      const sales = source.sales || actualSales;
+      const orders = actualOrders || source.orders;
+      const units = actualUnits || source.units;
+      const sales = actualSales || source.sales;
 
       return {
         ...source,

@@ -520,22 +520,16 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
 
   const getDailySalesByChannel = (channel: string) => {
     const dailySales: Record<string, { orders: number, units: number, sales: number }> = {};
-    const orderIdsByDate: Record<string, Set<string>> = {};
 
     allTransactions
       .filter(tx => tx.channel === channel)
-      .forEach((tx, index) => {
+      .forEach(tx => {
         if (!dailySales[tx.date]) dailySales[tx.date] = { orders: 0, units: 0, sales: 0 };
-        if (!orderIdsByDate[tx.date]) orderIdsByDate[tx.date] = new Set();
 
-        orderIdsByDate[tx.date].add(tx.id || `${tx.date}-${tx.product}-${index}`);
+        dailySales[tx.date].orders += 1;
         dailySales[tx.date].units += tx.quantity || 1;
         dailySales[tx.date].sales += tx.amount || 0;
       });
-
-    Object.entries(orderIdsByDate).forEach(([date, orderIds]) => {
-      dailySales[date].orders = orderIds.size;
-    });
 
     return dailySales;
   };
