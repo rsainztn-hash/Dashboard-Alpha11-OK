@@ -516,8 +516,58 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     };
   }).filter(Boolean);
 
-  const processVisitsSheet = (sheet: XLSX.WorkSheet | null, channel: string) => {
+  const getDailySalesByChannel = (channel: string) => {
+    const dailySales: Record<string, { orders: number, units: number, sales: number }> = {};
+    const orderIdsByDate: Record<string, Set<string>> = {};
+
+    allTransactions
+      .filter(tx => tx.channel === channel)
+      .forEach((tx, index) => {
+        if (!dailySales[tx.date]) dailySales[tx.date] = { orders: 0, units: 0, sales: 0 };
+        if (!orderIdsByDate[tx.date]) orderIdsByDate[tx.date] = new Set();
+
+        orderIdsByDate[tx.date].add(tx.id || `${tx.date}-${tx.product}-${index}`);
+        dailySales[tx.date].units += tx.quantity || 1;
+        dailySales[tx.date].sales += tx.amount || 0;
+      });
+
+    Object.entries(orderIdsByDate).forEach(([date, orderIds]) => {
+      dailySales[date].orders = orderIds.size;
+    });
+
+    return dailySales;
+  };
+
+  const processVisitsSheet = (sheet: XLSX.WorkSheet | null, channel: string, dateCol?: number, visitsCol?: number) => {
     if (!sheet) return [];
+    const dailySales = getDailySalesByChannel(channel);
+
+    if (dateCol !== undefined && visitsCol !== undefined) {
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const visitsByDate: Record<string, number> = {};
+
+      rows.forEach(row => {
+        const date = parseFlexibleDate(row?.[dateCol]);
+        const visits = parseAmount(row?.[visitsCol]);
+        if (!date.isValid() || visits <= 0) return;
+
+        const dateKey = date.format('YYYY-MM-DD');
+        visitsByDate[dateKey] = (visitsByDate[dateKey] || 0) + visits;
+      });
+
+      return Object.entries(visitsByDate).map(([date, visits]) => ({
+        date,
+        channel,
+        sessions: visits,
+        productViews: visits,
+        addToCart: 0,
+        checkoutStarted: 0,
+        orders: dailySales[date]?.orders || 0,
+        units: dailySales[date]?.units || 0,
+        sales: dailySales[date]?.sales || 0,
+      }));
+    }
+
     const rows = getRowsWithHeaders(sheet);
 
     return rows.map((row: any) => {
@@ -534,16 +584,16 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
         productViews: visits,
         addToCart: 0,
         checkoutStarted: 0,
-        orders: 0,
-        units: 0,
-        sales: 0,
+        orders: dailySales[date.format('YYYY-MM-DD')]?.orders || 0,
+        units: dailySales[date.format('YYYY-MM-DD')]?.units || 0,
+        sales: dailySales[date.format('YYYY-MM-DD')]?.sales || 0,
       };
     }).filter(Boolean);
   };
 
   const visitsData = [
     ...processVisitsSheet(findSheet(["Visitas Amazon", "Amazon Visits", "Amazon Traffic"]), "Amazon"),
-    ...processVisitsSheet(findSheet(["Visitas ML", "Visitas Meli", "Mercado Libre Visits", "Meli Visits"]), "Meli"),
+    ...processVisitsSheet(findSheet(["Visitas ML", "Visitas Meli", "Mercado Libre Visits", "Meli Visits"]), "Meli", 10, 12),
     ...processVisitsSheet(findSheet(["Visitas Shopify", "Shopify Visits", "Shopify Traffic"]), "Shopify"),
   ];
 
