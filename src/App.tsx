@@ -8,6 +8,7 @@ import Navbar from './components/Navbar';
 import Home from './components/Home';
 import Reports from './components/Reports';
 import Ads from './components/Ads';
+import Funnel from './components/Funnel';
 import { processSheetsData } from './services/dataService';
 import { syncGoogleSheetsData, checkGoogleAuthStatus } from './services/googleSheetsService';
 import dayjs from 'dayjs';
@@ -100,6 +101,7 @@ export default function App() {
         {activeTab === 'home' && <Home data={customData} isLoading={isLoading} {...filterProps} />}
         {activeTab === 'reports' && <Reports data={customData} {...filterProps} />}
         {activeTab === 'ads' && <Ads data={customData} {...filterProps} />}
+        {activeTab === 'funnel' && <Funnel data={customData} {...filterProps} />}
       </main>
     </div>
   );

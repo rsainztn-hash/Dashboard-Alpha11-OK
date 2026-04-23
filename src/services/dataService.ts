@@ -17,6 +17,7 @@ dayjs.locale('es');
 export interface DashboardData {
   products: any[];
   productSales: any[];
+  funnel: any[];
   metrics: Record<string, any>;
   timeSeries: any[];
   transactions: any[];
@@ -486,6 +487,35 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     if (productSalesMap[name].channels[tx.channel] !== undefined) productSalesMap[name].channels[tx.channel] += tx.amount;
   });
 
+  const funnelSheet = findSheet(["Funnel", "Funnel Ventas", "Sales Funnel"]);
+  const funnelRows = funnelSheet ? getRowsWithHeaders(funnelSheet) : [];
+  const funnelData = funnelRows.map((row: any) => {
+    const getVal = (names: string[]) => {
+      for (const name of names) {
+        if (row[name] !== undefined && row[name] !== null) return row[name];
+        const foundKey = Object.keys(row).find(k => k.toLowerCase().trim() === name.toLowerCase().trim() || k.toLowerCase().includes(name.toLowerCase()));
+        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) return row[foundKey];
+      }
+      return undefined;
+    };
+
+    const date = parseFlexibleDate(getVal(["Fecha", "Date", "Dia", "Day"]));
+    const channel = String(getVal(["Canal", "Channel", "Marketplace"]) || "Total").trim();
+    if (!date.isValid()) return null;
+
+    return {
+      date: date.format('YYYY-MM-DD'),
+      channel,
+      sessions: parseAmount(getVal(["Sesiones", "Sessions", "Visits", "Visitas"])),
+      productViews: parseAmount(getVal(["Vistas Producto", "Product Views", "Page Views", "Views"])),
+      addToCart: parseAmount(getVal(["Agregado Carrito", "Add To Cart", "Add to Cart", "Cart"])),
+      checkoutStarted: parseAmount(getVal(["Checkout", "Checkout Started", "Inicio Checkout"])),
+      orders: parseAmount(getVal(["Ordenes", "Orders", "Pedidos"])),
+      units: parseAmount(getVal(["Unidades", "Units"])),
+      sales: parseAmount(getVal(["Ventas", "Sales", "Revenue", "Ingresos"])),
+    };
+  }).filter(Boolean);
+
   const unitSheet = findSheet(["Unit Economics", "Productos", "Costos", "Rentabilidad"]);
   let mappedProducts = [];
   if (unitSheet) {
@@ -577,6 +607,7 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   return {
     products: mappedProducts,
     productSales: Object.values(productSalesMap),
+    funnel: funnelData,
     timeSeries: Object.values(timeSeriesMap).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
     adsTimeSeries: Object.values(adsTimeSeriesMap).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
     transactions: allTransactions.sort((a, b) => dayjs(b.date).unix() - dayjs(a.date).unix()),

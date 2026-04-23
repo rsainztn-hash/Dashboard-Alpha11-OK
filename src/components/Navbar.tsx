@@ -11,6 +11,7 @@ export default function Navbar({ activeTab, setActiveTab }: NavbarProps) {
     { id: 'home', label: 'Home' },
     { id: 'reports', label: 'Reports' },
     { id: 'ads', label: 'Ads' },
+    { id: 'funnel', label: 'Funnel' },
   ];
 
   return (
