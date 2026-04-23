@@ -487,34 +487,65 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     if (productSalesMap[name].channels[tx.channel] !== undefined) productSalesMap[name].channels[tx.channel] += tx.amount;
   });
 
+  const getRowValue = (row: any, names: string[]) => {
+    for (const name of names) {
+      if (row[name] !== undefined && row[name] !== null) return row[name];
+      const foundKey = Object.keys(row).find(k => k.toLowerCase().trim() === name.toLowerCase().trim() || k.toLowerCase().includes(name.toLowerCase()));
+      if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) return row[foundKey];
+    }
+    return undefined;
+  };
+
   const funnelSheet = findSheet(["Funnel", "Funnel Ventas", "Sales Funnel"]);
   const funnelRows = funnelSheet ? getRowsWithHeaders(funnelSheet) : [];
   const funnelData = funnelRows.map((row: any) => {
-    const getVal = (names: string[]) => {
-      for (const name of names) {
-        if (row[name] !== undefined && row[name] !== null) return row[name];
-        const foundKey = Object.keys(row).find(k => k.toLowerCase().trim() === name.toLowerCase().trim() || k.toLowerCase().includes(name.toLowerCase()));
-        if (foundKey && row[foundKey] !== undefined && row[foundKey] !== null) return row[foundKey];
-      }
-      return undefined;
-    };
-
-    const date = parseFlexibleDate(getVal(["Fecha", "Date", "Dia", "Day"]));
-    const channel = String(getVal(["Canal", "Channel", "Marketplace"]) || "Total").trim();
+    const date = parseFlexibleDate(getRowValue(row, ["Fecha", "Date", "Dia", "Day"]));
+    const channel = String(getRowValue(row, ["Canal", "Channel", "Marketplace"]) || "Total").trim();
     if (!date.isValid()) return null;
 
     return {
       date: date.format('YYYY-MM-DD'),
       channel,
-      sessions: parseAmount(getVal(["Sesiones", "Sessions", "Visits", "Visitas"])),
-      productViews: parseAmount(getVal(["Vistas Producto", "Product Views", "Page Views", "Views"])),
-      addToCart: parseAmount(getVal(["Agregado Carrito", "Add To Cart", "Add to Cart", "Cart"])),
-      checkoutStarted: parseAmount(getVal(["Checkout", "Checkout Started", "Inicio Checkout"])),
-      orders: parseAmount(getVal(["Ordenes", "Orders", "Pedidos"])),
-      units: parseAmount(getVal(["Unidades", "Units"])),
-      sales: parseAmount(getVal(["Ventas", "Sales", "Revenue", "Ingresos"])),
+      sessions: parseAmount(getRowValue(row, ["Sesiones", "Sessions", "Visits", "Visitas"])),
+      productViews: parseAmount(getRowValue(row, ["Vistas Producto", "Product Views", "Page Views", "Views"])),
+      addToCart: parseAmount(getRowValue(row, ["Agregado Carrito", "Add To Cart", "Add to Cart", "Cart"])),
+      checkoutStarted: parseAmount(getRowValue(row, ["Checkout", "Checkout Started", "Inicio Checkout"])),
+      orders: parseAmount(getRowValue(row, ["Ordenes", "Orders", "Pedidos"])),
+      units: parseAmount(getRowValue(row, ["Unidades", "Units"])),
+      sales: parseAmount(getRowValue(row, ["Ventas", "Sales", "Revenue", "Ingresos"])),
     };
   }).filter(Boolean);
+
+  const processVisitsSheet = (sheet: XLSX.WorkSheet | null, channel: string) => {
+    if (!sheet) return [];
+    const rows = getRowsWithHeaders(sheet);
+
+    return rows.map((row: any) => {
+      const date = parseFlexibleDate(getRowValue(row, ["date_from", "Fecha", "Date", "Dia", "Day"]));
+      const visits = parseAmount(getRowValue(row, ["total_visits", "Visitas", "Visits", "Sessions", "Sesiones"]));
+      if (!date.isValid() || visits <= 0) return null;
+
+      return {
+        date: date.format('YYYY-MM-DD'),
+        channel,
+        listingId: String(getRowValue(row, ["item_id", "Item ID", "Publication ID", "Publicacion"]) || "").trim(),
+        title: String(getRowValue(row, ["title", "Titulo", "Título"]) || "").trim(),
+        sessions: visits,
+        productViews: visits,
+        addToCart: 0,
+        checkoutStarted: 0,
+        orders: 0,
+        units: 0,
+        sales: 0,
+      };
+    }).filter(Boolean);
+  };
+
+  const visitsData = [
+    ...processVisitsSheet(findSheet(["Visitas Amazon", "Amazon Visits", "Amazon Traffic"]), "Amazon"),
+    ...processVisitsSheet(findSheet(["Visitas ML", "Visitas Meli", "Mercado Libre Visits", "Meli Visits"]), "Meli"),
+    ...processVisitsSheet(findSheet(["Visitas Shopify", "Shopify Visits", "Shopify Traffic"]), "Shopify"),
+  ];
 
   const unitSheet = findSheet(["Unit Economics", "Productos", "Costos", "Rentabilidad"]);
   let mappedProducts = [];
@@ -607,7 +638,7 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   return {
     products: mappedProducts,
     productSales: Object.values(productSalesMap),
-    funnel: funnelData,
+    funnel: [...funnelData, ...visitsData],
     timeSeries: Object.values(timeSeriesMap).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
     adsTimeSeries: Object.values(adsTimeSeriesMap).sort((a, b) => dayjs(a.date).unix() - dayjs(b.date).unix()),
     transactions: allTransactions.sort((a, b) => dayjs(b.date).unix() - dayjs(a.date).unix()),

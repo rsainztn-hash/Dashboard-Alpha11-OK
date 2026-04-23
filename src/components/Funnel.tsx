@@ -86,6 +86,13 @@ export default function Funnel({
       return selectedChannel === 'Total' || row.channel === selectedChannel || row.channel === 'Total';
     });
 
+    const actualSalesFromTransactions = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
+    const actualSalesFromSeries = filteredTimeSeries.reduce((sum: number, item: any) => sum + (item[selectedChannel] || 0), 0);
+    const actualSales = actualSalesFromTransactions || actualSalesFromSeries;
+    const orderKeys = new Set(filteredTransactions.map((tx: any, index: number) => tx.id || `${tx.date}-${tx.product}-${index}`));
+    const actualOrders = orderKeys.size || Math.max(0, Math.round(actualSales / 1200));
+    const actualUnits = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.quantity || 1), 0) || actualOrders;
+
     const sumRows = (rows: any[]) => rows.reduce((acc, row) => ({
       sessions: acc.sessions + (row.sessions || 0),
       productViews: acc.productViews + (row.productViews || 0),
@@ -97,24 +104,30 @@ export default function Funnel({
     }), { sessions: 0, productViews: 0, addToCart: 0, checkoutStarted: 0, orders: 0, units: 0, sales: 0 });
 
     if (filteredFunnel.length > 0) {
-      return { ...sumRows(filteredFunnel), isEstimated: false };
+      const source = sumRows(filteredFunnel);
+      const orders = source.orders || actualOrders;
+      const units = source.units || actualUnits;
+      const sales = source.sales || actualSales;
+
+      return {
+        ...source,
+        addToCart: source.addToCart || Math.round(orders * 2.2),
+        checkoutStarted: source.checkoutStarted || Math.round(orders * 1.35),
+        orders,
+        units,
+        sales,
+        isEstimated: false,
+      };
     }
 
-    const salesFromTransactions = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.amount || 0), 0);
-    const salesFromSeries = filteredTimeSeries.reduce((sum: number, item: any) => sum + (item[selectedChannel] || 0), 0);
-    const sales = salesFromTransactions || salesFromSeries;
-    const orderKeys = new Set(filteredTransactions.map((tx: any, index: number) => tx.id || `${tx.date}-${tx.product}-${index}`));
-    const orders = orderKeys.size || Math.max(0, Math.round(sales / 1200));
-    const units = filteredTransactions.reduce((sum: number, tx: any) => sum + (tx.quantity || 1), 0) || orders;
-
     return {
-      sessions: Math.round(orders * 12),
-      productViews: Math.round(orders * 8),
-      addToCart: Math.round(orders * 2.2),
-      checkoutStarted: Math.round(orders * 1.35),
-      orders,
-      units,
-      sales,
+      sessions: Math.round(actualOrders * 12),
+      productViews: Math.round(actualOrders * 8),
+      addToCart: Math.round(actualOrders * 2.2),
+      checkoutStarted: Math.round(actualOrders * 1.35),
+      orders: actualOrders,
+      units: actualUnits,
+      sales: actualSales,
       isEstimated: true,
     };
   }, [data?.funnel, filteredTransactions, filteredTimeSeries, inSelectedPeriod, selectedChannel]);
