@@ -537,13 +537,24 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   const processVisitsSheet = (sheet: XLSX.WorkSheet | null, channel: string, dateCol?: number, visitsCol?: number) => {
     if (!sheet) return [];
     const dailySales = getDailySalesByChannel(channel);
+    const parseVisitDate = (value: any) => {
+      const raw = String(value || "").trim();
+      const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+
+      if (channel === 'Meli' && isoMatch) {
+        const [, year, day, month] = isoMatch;
+        return dayjs(`${year}-${month}-${day}`, 'YYYY-MM-DD', true);
+      }
+
+      return parseFlexibleDate(value);
+    };
 
     if (dateCol !== undefined && visitsCol !== undefined) {
       const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
       const visitsByDate: Record<string, number> = {};
 
       rows.forEach(row => {
-        const date = parseFlexibleDate(row?.[dateCol]);
+        const date = parseVisitDate(row?.[dateCol]);
         const visits = parseAmount(row?.[visitsCol]);
         if (!date.isValid() || visits <= 0) return;
 
