@@ -111,7 +111,9 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     // Common formats including those seen in Meli/Mexican reports
     const formats = [
       'YYYY-MM-DD', 'DD/MM/YYYY', 'D/M/YYYY', 'MM/DD/YYYY', 'YYYY/MM/DD', 
+      'DD/MM/YY', 'D/M/YY',
       'DD-MM-YYYY', 'D-M-YYYY', 'DD.MM.YYYY', 'D.M.YYYY',
+      'DD-MM-YY', 'D-M-YY', 'DD.MM.YY', 'D.M.YY',
       'DD-MMM-YY', 'DD-MMM-YYYY', 'DD [de] MMMM [de] YYYY',
       'DD/MM/YYYY HH:mm:ss', 'D/M/YYYY H:mm:ss'
     ];
