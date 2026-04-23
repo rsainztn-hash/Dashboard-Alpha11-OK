@@ -11,6 +11,16 @@ import {
 } from 'lucide-react';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import FilterControls from './FilterControls';
 import { cn } from '@/src/lib/utils';
 
@@ -153,6 +163,49 @@ export default function Funnel({
   const cartToOrder = funnel.addToCart > 0 ? (funnel.orders / funnel.addToCart) * 100 : 0;
   const roas = adSpend > 0 ? funnel.sales / adSpend : 0;
 
+  const funnelTrendData = React.useMemo(() => {
+    const sourceRows = data?.funnel || [];
+    const filteredFunnel = sourceRows.filter((row: any) => {
+      if (!inSelectedPeriod(row.date)) return false;
+      return selectedChannel === 'Total' || row.channel === selectedChannel || row.channel === 'Total';
+    });
+
+    const bucketForDate = (dateValue: string) => {
+      const date = dayjs(dateValue);
+      return selectedPeriod === 'Year to Date' || selectedPeriod === 'Last Year'
+        ? date.format('YYYY-MM')
+        : date.format('YYYY-MM-DD');
+    };
+
+    const labelForBucket = (bucket: string) => {
+      return bucket.length === 7
+        ? dayjs(`${bucket}-01`).format('MMM YY')
+        : dayjs(bucket).format('DD MMM');
+    };
+
+    const trendMap: Record<string, { bucket: string, name: string, visits: number, orders: number, sales: number }> = {};
+
+    filteredFunnel.forEach((row: any) => {
+      const bucket = bucketForDate(row.date);
+      if (!trendMap[bucket]) trendMap[bucket] = { bucket, name: labelForBucket(bucket), visits: 0, orders: 0, sales: 0 };
+      trendMap[bucket].visits += row.sessions || 0;
+    });
+
+    filteredTransactions.forEach((tx: any) => {
+      const bucket = bucketForDate(tx.date);
+      if (!trendMap[bucket]) trendMap[bucket] = { bucket, name: labelForBucket(bucket), visits: 0, orders: 0, sales: 0 };
+      trendMap[bucket].orders += 1;
+      trendMap[bucket].sales += tx.amount || 0;
+    });
+
+    return Object.values(trendMap)
+      .sort((a, b) => a.bucket.localeCompare(b.bucket))
+      .map(item => ({
+        ...item,
+        conversion: item.visits > 0 ? Number(((item.orders / item.visits) * 100).toFixed(2)) : 0,
+      }));
+  }, [data?.funnel, filteredTransactions, inSelectedPeriod, selectedChannel, selectedPeriod]);
+
   return (
     <div className="pb-12 px-6 max-w-screen-2xl mx-auto space-y-10 pt-16">
       <div className="flex flex-col lg:flex-row justify-between items-start gap-8">
@@ -234,6 +287,45 @@ export default function Funnel({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      <div className="bg-white p-8 md:p-10 rounded-xl shadow-sm border border-outline-variant/10">
+        <div className="flex items-center justify-between mb-8 gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-on-surface">Funnel Over Time</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-on-surface-variant mt-1">Visits, orders and conversion trend</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-4 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-primary-container" /> Visits</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-3 rounded-sm bg-on-surface" /> Orders</div>
+            <div className="flex items-center gap-2"><span className="w-3 h-0.5 bg-red-500" /> Conversion</div>
+          </div>
+        </div>
+
+        <div className="h-[360px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={funnelTrendData} margin={{ top: 10, right: 24, left: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
+              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6B7280', fontWeight: 700 }} tickLine={false} axisLine={false} />
+              <YAxis yAxisId="volume" tick={{ fontSize: 11, fill: '#6B7280' }} tickLine={false} axisLine={false} />
+              <YAxis yAxisId="conversion" orientation="right" tick={{ fontSize: 11, fill: '#6B7280' }} tickLine={false} axisLine={false} tickFormatter={(value) => `${value}%`} />
+              <Tooltip
+                cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                formatter={(value: any, name: string) => {
+                  if (name === 'conversion') return [`${Number(value).toFixed(2)}%`, 'Conversion'];
+                  if (name === 'visits') return [fallbackNumber(Number(value)), 'Visits'];
+                  if (name === 'orders') return [fallbackNumber(Number(value)), 'Orders'];
+                  return [value, name];
+                }}
+                labelStyle={{ fontWeight: 800, color: '#111827' }}
+                contentStyle={{ borderRadius: 8, border: '1px solid #E5E7EB', boxShadow: '0 12px 32px rgba(15, 23, 42, 0.12)' }}
+              />
+              <Bar yAxisId="volume" dataKey="visits" fill="#006B3F" radius={[4, 4, 0, 0]} />
+              <Bar yAxisId="volume" dataKey="orders" fill="#111827" radius={[4, 4, 0, 0]} />
+              <Line yAxisId="conversion" type="monotone" dataKey="conversion" stroke="#EF4444" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
