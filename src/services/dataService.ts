@@ -560,14 +560,20 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     return dailySales;
   };
 
-  const processVisitsSheet = (sheet: XLSX.WorkSheet | null, channel: string, dateCol?: number, visitsCol?: number) => {
+  const processVisitsSheet = (
+    sheet: XLSX.WorkSheet | null,
+    channel: string,
+    dateCol?: number,
+    visitsCol?: number,
+    stageCols?: { addToCart?: number, checkoutStarted?: number, orders?: number, sales?: number }
+  ) => {
     if (!sheet) return [];
     const dailySales = getDailySalesByChannel(channel);
     const parseVisitDate = (value: any) => {
       const raw = String(value || "").trim();
       const isoMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
 
-      if (channel === 'Meli' && isoMatch) {
+      if ((channel === 'Meli' || channel === 'Shopify') && isoMatch) {
         const [, year, day, month] = isoMatch;
         return dayjs(`${year}-${month}-${day}`, 'YYYY-MM-DD', true);
       }
@@ -585,7 +591,8 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
         if (!date.isValid() || visits <= 0) return;
 
         const dateKey = date.format('YYYY-MM-DD');
-        visitsByDate[dateKey] = (visitsByDate[dateKey] || 0) + visits;
+        if (!visitsByDate[dateKey]) visitsByDate[dateKey] = 0;
+        visitsByDate[dateKey] += visits;
       });
 
       return Object.entries(visitsByDate).map(([date, visits]) => ({
@@ -598,6 +605,40 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
         orders: dailySales[date]?.orders || 0,
         units: dailySales[date]?.units || 0,
         sales: dailySales[date]?.sales || 0,
+      }));
+    }
+
+    if (stageCols) {
+      const rows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+      const funnelByDate: Record<string, { sessions: number, addToCart: number, checkoutStarted: number, orders: number, sales: number }> = {};
+
+      rows.slice(1).forEach(row => {
+        const date = parseVisitDate(row?.[0]);
+        const visits = parseAmount(row?.[1]);
+        if (!date.isValid() || visits <= 0) return;
+
+        const dateKey = date.format('YYYY-MM-DD');
+        if (!funnelByDate[dateKey]) {
+          funnelByDate[dateKey] = { sessions: 0, addToCart: 0, checkoutStarted: 0, orders: 0, sales: 0 };
+        }
+
+        funnelByDate[dateKey].sessions += visits;
+        funnelByDate[dateKey].addToCart += parseAmount(row?.[stageCols.addToCart ?? -1]);
+        funnelByDate[dateKey].checkoutStarted += parseAmount(row?.[stageCols.checkoutStarted ?? -1]);
+        funnelByDate[dateKey].orders += parseAmount(row?.[stageCols.orders ?? -1]);
+        funnelByDate[dateKey].sales += parseAmount(row?.[stageCols.sales ?? -1]);
+      });
+
+      return Object.entries(funnelByDate).map(([date, values]) => ({
+        date,
+        channel,
+        sessions: values.sessions,
+        productViews: values.sessions,
+        addToCart: values.addToCart,
+        checkoutStarted: values.checkoutStarted,
+        orders: dailySales[date]?.orders || values.orders,
+        units: dailySales[date]?.units || values.orders,
+        sales: dailySales[date]?.sales || values.sales,
       }));
     }
 
@@ -627,7 +668,12 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   const visitsData = [
     ...processVisitsSheet(findSheet(["Visitas Amazon", "Amazon Visits", "Amazon Traffic"]), "Amazon"),
     ...processVisitsSheet(findSheet(["Visitas ML", "Visitas Meli", "Mercado Libre Visits", "Meli Visits"]), "Meli", 10, 12),
-    ...processVisitsSheet(findSheet(["Visitas Shopify", "Shopify Visits", "Shopify Traffic"]), "Shopify"),
+    ...processVisitsSheet(findSheet(["Visitas Shopify", "Shopify Visits", "Shopify Traffic"]), "Shopify", undefined, undefined, {
+      addToCart: 4,
+      checkoutStarted: 2,
+      orders: 3,
+      sales: 7,
+    }),
   ];
 
   const unitSheet = findSheet(["Unit Economics", "Productos", "Costos", "Rentabilidad"]);
