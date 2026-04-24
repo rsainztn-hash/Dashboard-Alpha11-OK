@@ -2,6 +2,7 @@ import React from 'react';
 import { Download, ChevronLeft, ChevronRight, Bolt, Filter, ArrowUp, ArrowDown, Search, Check } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 import dayjs from 'dayjs';
+import * as XLSX from 'xlsx';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
@@ -277,6 +278,46 @@ export default function Reports({
     }
   };
 
+  const handleExportReport = () => {
+    if (filteredTransactions.length === 0) return;
+
+    const exportRows = filteredTransactions.map((tx: any) => ({
+      Canal: tx.channel || tx.canal || '',
+      Fecha: tx.date || tx.fecha || '',
+      'ID / Orden': tx.id || '',
+      Producto: tx.product || tx.producto || '',
+      Monto: Number(tx.amount || tx.monto || 0),
+      Status: tx.status || 'Approved'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(exportRows);
+    worksheet['!cols'] = [
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 34 },
+      { wch: 14 },
+      { wch: 14 }
+    ];
+
+    const amountColumnRange = XLSX.utils.decode_range(worksheet['!ref'] || 'A1');
+    for (let rowIndex = 1; rowIndex <= amountColumnRange.e.r; rowIndex += 1) {
+      const amountCell = worksheet[XLSX.utils.encode_cell({ r: rowIndex, c: 4 })];
+      if (amountCell) {
+        amountCell.t = 'n';
+        amountCell.z = '$#,##0.00';
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Reports');
+
+    const channelSlug = (selectedChannel || 'Total').replace(/\s+/g, '-').toLowerCase();
+    const periodSlug = (selectedPeriod || 'all').replace(/\s+/g, '-').toLowerCase();
+    const dateStamp = dayjs().format('YYYY-MM-DD');
+    XLSX.writeFile(workbook, `alpha11-report-${channelSlug}-${periodSlug}-${dateStamp}.xlsx`);
+  };
+
   return (
     <div className="pb-12 px-6 max-w-screen-2xl mx-auto space-y-10 pt-16">
       {/* Header & Filter Row */}
@@ -295,7 +336,11 @@ export default function Reports({
           />
           
           <div className="flex flex-wrap items-center gap-3 justify-end w-full lg:w-auto">
-            <button className="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-primary-container to-primary text-white font-bold rounded-lg shadow-md hover:scale-[1.02] active:scale-95 transition-all">
+            <button
+              onClick={handleExportReport}
+              disabled={filteredTransactions.length === 0}
+              className="flex items-center gap-2 px-6 py-2 bg-gradient-to-br from-primary-container to-primary text-white font-bold rounded-lg shadow-md hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
+            >
               <Download className="w-4 h-4" />
               <span>Export Report</span>
             </button>
