@@ -420,6 +420,32 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     return total;
   };
 
+  const processAdsSheetByColumns = (sheet: XLSX.WorkSheet, channel: string, dateColumnIndex: number, amountColumnIndex: number) => {
+    if (!sheet) return 0;
+    const rawRows: any[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+    if (rawRows.length <= 1) return 0;
+
+    let total = 0;
+
+    rawRows.slice(1).forEach((row) => {
+      if (!Array.isArray(row)) return;
+
+      const dateVal = row[dateColumnIndex];
+      const amountVal = row[amountColumnIndex];
+      const amount = parseAmount(amountVal);
+
+      if (!dateVal || amount <= 0) return;
+
+      const d = parseFlexibleDate(dateVal);
+      if (!d.isValid()) return;
+
+      total += amount;
+      recordAdInvestment(d.toDate(), amount, channel);
+    });
+
+    return total;
+  };
+
   // Ads
   const amazonAdsSheet = findSheet(["Publicidad Amazon", "Amazon Ads", "Ads Amazon", "Amazon Advertising"]);
   let totalAmazonAds = 0;
@@ -471,7 +497,7 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
   }
   
   const shopifyAdsSheet = findSheet(["Publicidad Shopify", "Shopify Ads", "Ads Shopify", "Meta Ads", "Google Ads", "Shopify Advertising"]);
-  const totalShopifyAds = processAdsSheet(shopifyAdsSheet, "Shopify", ["Date", "Fecha", "Day", "Día"], ["Spend", "Gasto", "Inversión", "Inversion", "Cost", "Costo"]);
+  const totalShopifyAds = processAdsSheetByColumns(shopifyAdsSheet, "Shopify", 2, 7);
 
   const totalSales = totalAmazonSales + totalMeliSales + totalShopifySales + totalDirectSales;
   const totalAdsInvestment = totalAmazonAds + totalMeliAds + totalShopifyAds;
