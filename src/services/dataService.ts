@@ -171,6 +171,31 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
     });
   };
 
+  const parseSkuAliases = (value: any): string[] => {
+    const raw = String(value || "").trim();
+    if (!raw) return [];
+
+    return Array.from(new Set(
+      raw
+        .split(/[,\n;|]+/)
+        .map((item) => item.trim())
+        .filter((item) => item && item.toLowerCase() !== 'null' && item.toLowerCase() !== 'undefined')
+    ));
+  };
+
+  const getSkuAliasesFromRow = (row: any, matchers: string[]) => {
+    const aliases = new Set<string>();
+
+    Object.keys(row).forEach((key) => {
+      const normalizedKey = key.toLowerCase().trim();
+      if (matchers.some((matcher) => normalizedKey.includes(matcher))) {
+        parseSkuAliases(row[key]).forEach((alias) => aliases.add(alias));
+      }
+    });
+
+    return Array.from(aliases);
+  };
+
   const findSheet = (names: string[]) => {
     const sheetNames = Object.keys(workbook.Sheets);
     for (const name of names) {
@@ -271,8 +296,9 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
         };
         Object.keys(row).forEach(key => {
           if (key.toLowerCase().includes('sku')) {
-            const val = String(row[key] || "").trim();
-            if (val && val !== "undefined" && val !== "null") productDataMap[val] = productInfo;
+            parseSkuAliases(row[key]).forEach((alias) => {
+              productDataMap[alias] = productInfo;
+            });
           }
         });
         productDataMap[String(name).trim()] = productInfo;
@@ -684,11 +710,18 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
       const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('nombre') || k.toLowerCase().includes('producto'));
       const name = nameKey ? String(row[nameKey]).trim() : null;
       if (!name) return null;
+      const amazonSkuAliases = getSkuAliasesFromRow(row, ['sku amazon', 'amazon sku']);
+      const meliSkuAliases = getSkuAliasesFromRow(row, ['sku ml', 'sku meli', 'meli sku', 'mercado libre']);
+      const shopifySkuAliases = getSkuAliasesFromRow(row, ['sku shopify', 'shopify sku']);
+
       return {
         name,
         price: parseAmount(row['Precio Público de venta'] || row['Precio'] || row['Price']),
         cost: parseAmount(row['Costo Producto (Landed Cost)'] || row['Costo'] || row['Cost']),
-        skuAmazon: String(row['SKU Amazon'] || row['SKU'] || "").trim(),
+        skuAmazon: amazonSkuAliases[0] || String(row['SKU Amazon'] || row['SKU'] || "").trim(),
+        amazonSkuAliases,
+        meliSkuAliases,
+        shopifySkuAliases,
         fees: 0, shipping: 0, ads: 0, pl: 0, return: "0.0"
       };
     }).filter(p => p !== null).sort((a: any, b: any) => b.price - a.price);
@@ -728,12 +761,12 @@ export const processDataFromWorkbook = (workbook: XLSX.WorkBook): Partial<Dashbo
       const nameKey = Object.keys(row).find(k => k.toLowerCase().includes('nombre') || k.toLowerCase().includes('producto'));
       const name = nameKey ? String(row[nameKey]).trim() : null;
       if (!name) return;
-      const skuAmazon = String(row["SKU Amazon"] || "").trim();
-      const skuMeli = String(row["SKU ML"] || "").trim();
-      const skuShopify = String(row["SKU Shopify"] || "").trim();
-      const totalAmazon = skuAmazon && stockMap[skuAmazon] ? stockMap[skuAmazon].amazon : 0;
-      const totalMeli = skuMeli && stockMap[skuMeli] ? stockMap[skuMeli].meli : 0;
-      const totalShopify = skuShopify && stockMap[skuShopify] ? stockMap[skuShopify].shopify : 0;
+      const amazonSkuAliases = getSkuAliasesFromRow(row, ['sku amazon', 'amazon sku']);
+      const meliSkuAliases = getSkuAliasesFromRow(row, ['sku ml', 'sku meli', 'meli sku', 'mercado libre']);
+      const shopifySkuAliases = getSkuAliasesFromRow(row, ['sku shopify', 'shopify sku']);
+      const totalAmazon = amazonSkuAliases.reduce((sum, sku) => sum + (stockMap[sku]?.amazon || 0), 0);
+      const totalMeli = meliSkuAliases.reduce((sum, sku) => sum + (stockMap[sku]?.meli || 0), 0);
+      const totalShopify = shopifySkuAliases.reduce((sum, sku) => sum + (stockMap[sku]?.shopify || 0), 0);
       const stockByChannel = {
         Amazon: totalAmazon,
         Meli: totalMeli,

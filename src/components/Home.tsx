@@ -232,8 +232,11 @@ export default function Home({
         if (channel === 'Amazon') {
           // Exact matching for Amazon if SKU is available
           if (p.skuAmazon) {
+            const amazonSkuAliases = Array.isArray(p.amazonSkuAliases) && p.amazonSkuAliases.length > 0
+              ? p.amazonSkuAliases
+              : [p.skuAmazon];
             const exactAds = filteredAdsTransactions
-              .filter((ad: any) => ad.channel === 'Amazon' && ad.sku === p.skuAmazon)
+              .filter((ad: any) => ad.channel === 'Amazon' && amazonSkuAliases.includes(ad.sku))
               .reduce((sum: number, ad: any) => sum + ad.amount, 0);
             totalAdsForProduct += exactAds;
           } else {
